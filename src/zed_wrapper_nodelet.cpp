@@ -67,6 +67,28 @@
 #include <sl/Camera.hpp>
 
 using namespace std;
+ 
+static const boost::array<double, 36> STANDARD_POSE_COVARIANCE =
+{ { 0.01, 0, 0, 0, 0, 0,
+	0, 0.01, 0, 0, 0, 0,
+	0, 0, 0.01, 0, 0, 0,
+	0, 0, 0, 0.0017, 0, 0,
+	0, 0, 0, 0, 0.0017, 0,
+	0, 0, 0, 0, 0, 0.0017 } };
+static const boost::array<double, 36> STANDARD_TWIST_COVARIANCE =
+{ { 0.05, 0, 0, 0, 0, 0,
+	0, 0.05, 0, 0, 0, 0,
+	0, 0, 0.05, 0, 0, 0,
+	0, 0, 0, 0.009, 0, 0,
+	0, 0, 0, 0, 0.009, 0,
+	0, 0, 0, 0, 0, 0.009 } };
+static const boost::array<double, 36> BAD_COVARIANCE =
+{ { 9999, 0, 0, 0, 0, 0,
+	0, 9999, 0, 0, 0, 0,
+	0, 0, 9999, 0, 0, 0,
+	0, 0, 0, 9999, 0, 0,
+	0, 0, 0, 0, 9999, 0,
+	0, 0, 0, 0, 0, 9999 } };
 
 namespace zed_wrapper {
 
@@ -111,6 +133,18 @@ namespace zed_wrapper {
         int gpu_id;
         int zed_id;
         int depth_stabilization;
+
+ 		int brightness;
+ 		int contrast;
+ 		int hue;
+ 		int saturation;
+ 		int gain;
+ 		int exposure;
+ 		int whitebalance;
+ 		bool flip;
+ 		bool disable_calibrate;
+ 		std::string zed_name;
+
         std::string odometry_DB;
         std::string svo_filepath;
 
@@ -132,6 +166,9 @@ namespace zed_wrapper {
         sl::Mat cloud;
         string point_cloud_frame_id = "";
         ros::Time point_cloud_time;
+
+ 		boost::array<double, 36> pose_covariance;
+ 		boost::array<double, 36> twist_covariance;
 
         /* \brief Convert an sl:Mat to a cv::Mat
          * \param mat : the sl::Mat to convert
@@ -184,7 +221,7 @@ namespace zed_wrapper {
          * \param frameId : the id of the reference frame of the image
          * \param t : the ros::Time to stamp the image
          */
-        sensor_msgs::ImagePtr imageToROSmsg(cv::Mat img, const std::string encodingType, std::string frameId, ros::Time t) {
+        sensor_msgs::ImagePtr imageToROSmsg(const cv::Mat &img, const std::string &encodingType, const std::string &frameId, const ros::Time &t) {
             sensor_msgs::ImagePtr ptr = boost::make_shared<sensor_msgs::Image>();
             sensor_msgs::Image& imgMessage = *ptr;
             imgMessage.header.stamp = t;
@@ -218,7 +255,7 @@ namespace zed_wrapper {
          * \param odom_frame_id : the id of the reference frame of the pose
          * \param t : the ros::Time to stamp the image
          */
-        void publishOdom(tf2::Transform base_transform, ros::Publisher &pub_odom, string odom_frame_id, ros::Time t) {
+        void publishOdom(const tf2::Transform &base_transform, ros::Publisher &pub_odom, const string &odom_frame_id, const ros::Time &t) {
             nav_msgs::Odometry odom;
             odom.header.stamp = t;
             odom.header.frame_id = odom_frame_id; // odom_frame
@@ -243,9 +280,9 @@ namespace zed_wrapper {
          * \param odometry_transform_frame_id : the id of the transformation
          * \param t : the ros::Time to stamp the image
          */
-        void publishTrackedFrame(tf2::Transform base_transform, tf2_ros::TransformBroadcaster &trans_br, string odometry_transform_frame_id, ros::Time t) {
+        void publishTrackedFrame(const tf2::Transform &base_transform, tf2_ros::TransformBroadcaster &trans_br, const string &odometry_transform_frame_id, const ros::Time &t) {
             geometry_msgs::TransformStamped transformStamped;
-            transformStamped.header.stamp = ros::Time::now();
+            transformStamped.header.stamp = t;
             transformStamped.header.frame_id = odometry_frame_id;
             transformStamped.child_frame_id = odometry_transform_frame_id;
             // conversion from Tranform to message
@@ -260,7 +297,7 @@ namespace zed_wrapper {
          * \param img_frame_id : the id of the reference frame of the image
          * \param t : the ros::Time to stamp the image
          */
-        void publishImage(cv::Mat img, image_transport::Publisher &pub_img, string img_frame_id, ros::Time t) {
+        void publishImage(const cv::Mat &img, image_transport::Publisher &pub_img, const string &img_frame_id, const ros::Time &t) {
             pub_img.publish(imageToROSmsg(img, sensor_msgs::image_encodings::BGR8, img_frame_id, t));
         }
 
@@ -270,7 +307,7 @@ namespace zed_wrapper {
          * \param depth_frame_id : the id of the reference frame of the depth image
          * \param t : the ros::Time to stamp the depth image
          */
-        void publishDepth(cv::Mat depth, image_transport::Publisher &pub_depth, string depth_frame_id, ros::Time t) {
+        void publishDepth(const cv::Mat &depth, image_transport::Publisher &pub_depth, const string &depth_frame_id, const ros::Time &t) {
             string encoding;
             if (openniDepthMode) {
                 depth *= 1000.0f;
@@ -318,7 +355,7 @@ namespace zed_wrapper {
          * \param pub_cam_info : the publisher object to use
          * \param t : the ros::Time to stamp the message
          */
-        void publishCamInfo(sensor_msgs::CameraInfoPtr cam_info_msg, ros::Publisher pub_cam_info, ros::Time t) {
+        void publishCamInfo(sensor_msgs::CameraInfoPtr cam_info_msg, ros::Publisher pub_cam_info, const ros::Time &t) {
             static int seq = 0;
             cam_info_msg->header.stamp = t;
             cam_info_msg->header.seq = seq;
@@ -334,7 +371,7 @@ namespace zed_wrapper {
          * \param right_frame_id : the id of the reference frame of the right camera
          */
         void fillCamInfo(sl::Camera* zed, sensor_msgs::CameraInfoPtr left_cam_info_msg, sensor_msgs::CameraInfoPtr right_cam_info_msg,
-                string left_frame_id, string right_frame_id) {
+                const string &left_frame_id, const string &right_frame_id) {
 
             int width = zed->getResolution().width;
             int height = zed->getResolution().height;
@@ -393,12 +430,12 @@ namespace zed_wrapper {
             right_cam_info_msg->header.frame_id = right_frame_id;
         }
 
-        void callback(zed_wrapper::ZedConfig &config, uint32_t level) {
+        void callback(const zed_wrapper::ZedConfig &config, uint32_t level) {
             NODELET_INFO("Reconfigure confidence : %d", config.confidence);
             confidence = config.confidence;
         }
 
-        void device_poll() {
+        void device_poll(void) {
             ros::Rate loop_rate(rate);
             ros::Time old_t = ros::Time::now();
             bool old_image = false;
@@ -628,18 +665,29 @@ namespace zed_wrapper {
         }
 
         boost::shared_ptr<dynamic_reconfigure::Server<zed_wrapper::ZedConfig>> server;
-        void onInit() {
+        void onInit(void) {
             // Launch file parameters
             resolution = sl::RESOLUTION_HD720;
             quality = sl::DEPTH_MODE_PERFORMANCE;
             sensing_mode = sl::SENSING_MODE_STANDARD;
             rate = 30;
+  			brightness = -1;
+  			contrast = -1;
+  			hue = -1;
+  			saturation = -1;
+  			gain = -1;
+  			exposure = -1;
+  			whitebalance = -1;
+  			flip = false;
+  			disable_calibrate = false;
             gpu_id = -1;
             zed_id = 0;
             odometry_DB = "";
 
             nh = getMTNodeHandle();
             nh_ns = getMTPrivateNodeHandle();
+            if (!nh_ns.getParam("zed_name", zed_name))
+ 				zed_name = "zed";
 
             // Set  default cordinate frames
             // If unknown left and right frames are set in the same camera coordinate frame
@@ -677,7 +725,7 @@ namespace zed_wrapper {
             string left_topic = "left/" + img_topic;
             string left_raw_topic = "left/" + img_raw_topic;
             string left_cam_info_topic = "left/camera_info";
-            left_frame_id = camera_frame_id;
+            left_frame_id = camera_frame_id; // KCJ - why not separate frames for left and right cameras?
 
             string right_topic = "right/" + img_topic;
             string right_raw_topic = "right/" + img_raw_topic;
@@ -702,7 +750,17 @@ namespace zed_wrapper {
             string point_cloud_topic = "point_cloud/cloud_registered";
             cloud_frame_id = camera_frame_id;
 
-            string odometry_topic = "odom";
+			string odometry_topic = "odom";
+
+			nh_ns.getParam("brightness", brightness);
+			nh_ns.getParam("contrast", contrast);
+			nh_ns.getParam("hue", hue);
+			nh_ns.getParam("saturation", saturation);
+			nh_ns.getParam("gain", gain);
+			nh_ns.getParam("exposure", exposure);
+			nh_ns.getParam("whitebalance", whitebalance);
+			nh_ns.getParam("flip", flip);
+			nh_ns.getParam("disable_calibrate", disable_calibrate);
 
             nh_ns.getParam("rgb_topic", rgb_topic);
             nh_ns.getParam("rgb_raw_topic", rgb_raw_topic);
@@ -750,6 +808,9 @@ namespace zed_wrapper {
             param.sdk_verbose = true;
             param.sdk_gpu_id = gpu_id;
             param.depth_stabilization = depth_stabilization;
+ 			param.camera_disable_self_calib = disable_calibrate;
+            param.camera_image_flip = flip;
+
 
             sl::ERROR_CODE err = sl::ERROR_CODE_CAMERA_NOT_DETECTED;
             while (err != sl::SUCCESS) {
@@ -757,6 +818,14 @@ namespace zed_wrapper {
                 NODELET_INFO_STREAM(errorCode2str(err));
                 std::this_thread::sleep_for(std::chrono::milliseconds(2000));
             }
+ 			// Apply camera settings once the camera is opened correctly
+ 			zed->setCameraSettings(sl::CAMERA_SETTINGS_BRIGHTNESS, brightness, brightness < 0);
+ 			zed->setCameraSettings(sl::CAMERA_SETTINGS_CONTRAST, contrast, contrast < 0);
+ 			zed->setCameraSettings(sl::CAMERA_SETTINGS_HUE, hue, hue < 0);
+ 			zed->setCameraSettings(sl::CAMERA_SETTINGS_SATURATION, saturation, saturation < 0);
+ 			zed->setCameraSettings(sl::CAMERA_SETTINGS_GAIN, gain, gain < 0);
+ 			zed->setCameraSettings(sl::CAMERA_SETTINGS_EXPOSURE, exposure, exposure < 0);
+ 			zed->setCameraSettings(sl::CAMERA_SETTINGS_WHITEBALANCE, whitebalance, whitebalance < 0);
 
             //Reconfigure confidence
             server = boost::make_shared<dynamic_reconfigure::Server<zed_wrapper::ZedConfig>>();
@@ -766,6 +835,22 @@ namespace zed_wrapper {
 
             nh_ns.getParam("confidence", confidence);
 
+			pose_covariance = STANDARD_POSE_COVARIANCE;
+			twist_covariance = STANDARD_TWIST_COVARIANCE;
+			ifstream infile("/home/ubuntu/2017VisionCode/zebROS_ws/src/zed-ros-wrapper-master/zed_calib.dat");
+			if(infile.good()) {
+				int ln = 0;
+				std::string line;
+				while(std::getline(infile,line)) {
+					pose_covariance[ln] = std::stod(line);
+					ln++;
+				}
+				ln = 0;
+				while(std::getline(infile,line)) {
+					twist_covariance[ln] = std::stod(line);
+					ln++;
+				}
+			}
 
             // Create all the publishers
             // Image publishers
