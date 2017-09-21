@@ -49,7 +49,6 @@ find_package(catkin COMPONENTS
   sensor_msgs
   dynamic_reconfigure
   tf2_ros
-  nodelet
   tf2_geometry_msgs
 )
 
@@ -57,6 +56,7 @@ if (NOT DEFINED CMAKE_TOOLCHAIN_FILE)
   find_package(catkin COMPONENTS
     image_transport
     pcl_conversions
+	nodelet
   )
   checkPackage("image_transport" "")
   checkPackage("pcl_conversions" "")
