@@ -60,6 +60,7 @@ if (NOT DEFINED CMAKE_TOOLCHAIN_FILE)
   )
   checkPackage("image_transport" "")
   checkPackage("pcl_conversions" "")
+  checkPackage("nodelet" "")
 endif()
 
 checkPackage("roscpp" "")
@@ -67,7 +68,6 @@ checkPackage("rosconsole" "")
 checkPackage("sensor_msgs" "")
 checkPackage("dynamic_reconfigure" "")
 checkPackage("tf2_ros" "")
-checkPackage("nodelet" "")
 checkPackage("tf2_geometry_msgs" "")
 
 generate_dynamic_reconfigure_options(
