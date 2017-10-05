@@ -240,7 +240,7 @@ namespace zed_wrapper {
             else {
                 uchar* opencvData = img.data;
                 uchar* rosData = (uchar*) (&imgMessage.data[0]);
-                for (unsigned int i = 0; i < img.rows; i++) {
+                for (int i = 0; i < img.rows; i++) {
                     memcpy(rosData, opencvData, imgMessage.step);
                     rosData += imgMessage.step;
                     opencvData += img.step;
@@ -430,7 +430,7 @@ namespace zed_wrapper {
             right_cam_info_msg->header.frame_id = right_frame_id;
         }
 
-        void callback(const zed_wrapper::ZedConfig &config, uint32_t level) {
+        void callback(const zed_wrapper::ZedConfig &config, uint32_t /*level*/) {
             NODELET_INFO("Reconfigure confidence : %d", config.confidence);
             confidence = config.confidence;
         }

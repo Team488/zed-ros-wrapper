@@ -80,7 +80,6 @@ if (NOT DEFINED CMAKE_TOOLCHAIN_FILE)
       roscpp
       rosconsole
       sensor_msgs
-      opencv
       image_transport
       dynamic_reconfigure
       tf2_ros
