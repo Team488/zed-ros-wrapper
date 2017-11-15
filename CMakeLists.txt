@@ -16,10 +16,17 @@ function(checkPackage package customMessage)
     endif()
 endfunction(checkPackage)
 
+# Don't cross build, also skip building
+# if the ZED SDK is missing
+unset(BUILD_ME CACHE)
 if (NOT DEFINED CMAKE_TOOLCHAIN_FILE)
   find_package(ZED 2.0)
-  checkPackage("ZED" "ZED SDK not found, install it from:\n https://www.stereolabs.com/developers/")
+  if (ZED_FOUND)
+    set (BUILD_ME True)
+  endif()
+endif()
 
+if (BUILD_ME)
   ##For Jetson, OpenCV4Tegra is based on OpenCV2.4
   exec_program(uname ARGS -p OUTPUT_VARIABLE CMAKE_SYSTEM_NAME2)
   if ( CMAKE_SYSTEM_NAME2 MATCHES "aarch64" ) # Jetson TX1
@@ -41,40 +48,33 @@ if (NOT DEFINED CMAKE_TOOLCHAIN_FILE)
 
   find_package(PCL)
   checkPackage("PCL" "PCL not found, try to install it with:\n sudo apt-get install libpcl1 ros-$(rosversion -d)-pcl-ros")
-endif()
 
-find_package(catkin COMPONENTS
-  roscpp
-  rosconsole
-  sensor_msgs
-  dynamic_reconfigure
-  tf2_ros
-  tf2_geometry_msgs
-)
-
-if (NOT DEFINED CMAKE_TOOLCHAIN_FILE)
   find_package(catkin COMPONENTS
+	roscpp
+	rosconsole
+	sensor_msgs
+	dynamic_reconfigure
+	tf2_ros
+	tf2_geometry_msgs
     image_transport
     pcl_conversions
 	nodelet
   )
+
+  checkPackage("roscpp" "")
+  checkPackage("rosconsole" "")
+  checkPackage("sensor_msgs" "")
+  checkPackage("dynamic_reconfigure" "")
+  checkPackage("tf2_ros" "")
+  checkPackage("tf2_geometry_msgs" "")
   checkPackage("image_transport" "")
   checkPackage("pcl_conversions" "")
   checkPackage("nodelet" "")
-endif()
+  
+  generate_dynamic_reconfigure_options(
+    cfg/Zed.cfg
+  )
 
-checkPackage("roscpp" "")
-checkPackage("rosconsole" "")
-checkPackage("sensor_msgs" "")
-checkPackage("dynamic_reconfigure" "")
-checkPackage("tf2_ros" "")
-checkPackage("tf2_geometry_msgs" "")
-
-generate_dynamic_reconfigure_options(
-  cfg/Zed.cfg
-)
-
-if (NOT DEFINED CMAKE_TOOLCHAIN_FILE)
   catkin_package(
     CATKIN_DEPENDS
       roscpp
@@ -114,7 +114,8 @@ if (NOT DEFINED CMAKE_TOOLCHAIN_FILE)
     ${ZED_LIBRARIES}
     ${CUDA_LIBRARIES} ${CUDA_nppi_LIBRARY} ${CUDA_npps_LIBRARY}
     ${OpenCV_LIBS}
-    ${PCL_LIBRARIES})
+    ${PCL_LIBRARIES}
+  )
 
   add_library(ZEDWrapper src/zed_wrapper_nodelet.cpp)
   target_link_libraries(ZEDWrapper ${LINK_LIBRARIES})
@@ -123,29 +124,26 @@ if (NOT DEFINED CMAKE_TOOLCHAIN_FILE)
   add_executable(zed_wrapper_node src/zed_wrapper_node.cpp)
   target_link_libraries(zed_wrapper_node ZEDWrapper ${LINK_LIBRARIES})
   add_dependencies(zed_wrapper_node ${PROJECT_NAME}_gencfg)
-endif()
 
-###############################################################################
+  ###############################################################################
 
-#Add all files in subdirectories of the project in
-# a dummy_target so qtcreator have access to all files
-FILE(GLOB_RECURSE extra_files ${CMAKE_SOURCE_DIR}/*)
-add_custom_target(dummy_${PROJECT_NAME} SOURCES ${extra_files})
+  #Add all files in subdirectories of the project in
+  # a dummy_target so qtcreator have access to all files
+  FILE(GLOB_RECURSE extra_files ${CMAKE_SOURCE_DIR}/*)
+  add_custom_target(dummy_${PROJECT_NAME} SOURCES ${extra_files})
 
-###############################################################################
-# INSTALL
-
-if (NOT DEFINED CMAKE_TOOLCHAIN_FILE)
+  ###############################################################################
+  # INSTALL
   install(TARGETS
     ZEDWrapper
     zed_wrapper_node
     ARCHIVE DESTINATION ${CATKIN_PACKAGE_LIB_DESTINATION}
     LIBRARY DESTINATION ${CATKIN_PACKAGE_LIB_DESTINATION}
     RUNTIME DESTINATION ${CATKIN_PACKAGE_BIN_DESTINATION})
-endif()
-install(FILES
-  nodelet_plugins.xml
-  DESTINATION ${CATKIN_PACKAGE_SHARE_DESTINATION})
-install(DIRECTORY
-  launch urdf
-  DESTINATION ${CATKIN_PACKAGE_SHARE_DESTINATION})
+  install(FILES
+    nodelet_plugins.xml
+    DESTINATION ${CATKIN_PACKAGE_SHARE_DESTINATION})
+  install(DIRECTORY
+    launch urdf
+    DESTINATION ${CATKIN_PACKAGE_SHARE_DESTINATION})
+endif() # if (BUILD_ME)
