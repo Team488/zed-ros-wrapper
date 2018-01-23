@@ -25,7 +25,7 @@ endfunction(checkPackage)
 # if the ZED SDK is missing
 unset(BUILD_ME CACHE)
 if (NOT DEFINED CMAKE_TOOLCHAIN_FILE)
-  find_package(ZED 2.1)
+  find_package(ZED 2.3)
   if (ZED_FOUND)
     set (BUILD_ME True)
   endif()
@@ -106,15 +106,12 @@ if (BUILD_ME)
     
     ###############################################################################
     # EXECUTABLE
-    
-    
     if(NOT DEFINED CUDA_NPP_LIBRARIES_ZED)
         #To deal with cuda 9 nppi libs and previous versions of ZED SDK
         set(CUDA_NPP_LIBRARIES_ZED ${CUDA_npp_LIBRARY} ${CUDA_npps_LIBRARY} ${CUDA_nppi_LIBRARY})   
     endif()
     
     
-    add_definitions(-std=c++11)
     list(REMOVE_ITEM PCL_LIBRARIES "vtkproj4") ## if using from pcl package (pcl/vtk bug)
     set(LINK_LIBRARIES
       ${catkin_LIBRARIES}
@@ -154,4 +151,3 @@ if (BUILD_ME)
       launch
       DESTINATION ${CATKIN_PACKAGE_SHARE_DESTINATION})
 endif()
-    
